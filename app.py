@@ -2,9 +2,10 @@
 import streamlit as st
 import pandas as pd
 from database import SessionLocal, Customer, Product, Order, init_db
-from sqlalchemy.exc import IntegrityError
 
 st.set_page_config(page_title="Mini Store (SQL Server)", layout="wide")
+
+# Initialize database and session
 init_db()
 session = SessionLocal()
 
@@ -14,118 +15,140 @@ menu = ["Customers", "Products", "Orders"]
 choice = st.sidebar.radio("Menu", menu)
 
 def refresh_session():
+    """Refreshes SQLAlchemy session."""
     global session
     session.close()
     session = SessionLocal()
 
-# ---------------- Customers ----------------
+# ----------------------------------------
+# CUSTOMERS PAGE
+# ----------------------------------------
 if choice == "Customers":
     st.header("👤 Customers")
 
-    with st.expander("Add new customer"):
+    # Add new customer
+    with st.expander("Add New Customer"):
         name = st.text_input("Customer Name", key="new_cust_name")
         email = st.text_input("Email", key="new_cust_email")
+
         if st.button("Add Customer", key="add_customer"):
             if not name.strip():
-                st.error("Name is required")
+                st.error("Name is required.")
             else:
                 c = Customer(name=name.strip(), email=email.strip() or None)
                 session.add(c)
                 session.commit()
-                st.success("Customer added")
+                st.success("Customer added successfully!")
                 refresh_session()
 
-    st.subheader("Existing customers")
+    # Customer list
+    st.subheader("Customer List")
     customers = session.query(Customer).order_by(Customer.id).all()
     df = pd.DataFrame([{"ID": c.id, "Name": c.name, "Email": c.email or ""} for c in customers])
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
 
+    # Edit/Delete
     st.markdown("---")
-    st.subheader("Edit / Delete customer")
+    st.subheader("Edit / Delete Customer")
+
     cust_map = {f"{c.id} — {c.name}": c.id for c in customers}
+
     if cust_map:
-        choice_key = st.selectbox("Choose customer", [""] + list(cust_map.keys()), key="edit_cust_select")
-        if choice_key:
-            cid = cust_map[choice_key]
+        selected = st.selectbox("Choose customer", [""] + list(cust_map.keys()))
+
+        if selected:
+            cid = cust_map[selected]
             c = session.query(Customer).get(cid)
+
             col1, col2 = st.columns(2)
             with col1:
-                new_name = st.text_input("Name", value=c.name, key=f"cust_name_{cid}")
+                new_name = st.text_input("Name", value=c.name)
             with col2:
-                new_email = st.text_input("Email", value=c.email or "", key=f"cust_email_{cid}")
-            if st.button("Save changes", key=f"save_cust_{cid}"):
+                new_email = st.text_input("Email", value=c.email or "")
+
+            if st.button("Save Changes"):
                 c.name = new_name.strip() or c.name
                 c.email = new_email.strip() or None
                 session.commit()
-                st.success("Customer updated")
+                st.success("Customer updated!")
                 refresh_session()
-            if st.button("Delete customer", key=f"delete_cust_{cid}"):
-                # optional: check if orders exist and block or cascade
-                orders = session.query(Order).filter(Order.customer_id == cid).count()
-                if orders:
-                    if st.confirmation_dialog := False:
-                        pass
-                    # here we delete orders too for simplicity - alternative: prevent deletion
-                    session.query(Order).filter(Order.customer_id == cid).delete()
+
+            if st.button("Delete Customer"):
+                # Delete all orders for this customer
+                session.query(Order).filter(Order.customer_id == cid).delete()
                 session.delete(c)
                 session.commit()
-                st.success("Customer deleted")
+                st.success("Customer deleted!")
                 refresh_session()
     else:
-        st.info("No customers yet. Add one above.")
+        st.info("No customers found.")
 
-# ---------------- Products ----------------
+# ----------------------------------------
+# PRODUCTS PAGE
+# ----------------------------------------
 elif choice == "Products":
     st.header("📦 Products")
 
-    with st.expander("Add new product"):
+    # Add new product
+    with st.expander("Add New Product"):
         name = st.text_input("Product Name", key="new_prod_name")
         price = st.number_input("Price", min_value=0.0, format="%.2f", key="new_prod_price")
+
         if st.button("Add Product", key="add_product"):
             if not name.strip():
-                st.error("Product name required")
+                st.error("Product name is required.")
             else:
                 p = Product(name=name.strip(), price=float(price))
                 session.add(p)
                 session.commit()
-                st.success("Product added")
+                st.success("Product added successfully!")
                 refresh_session()
 
+    # Product list
     st.subheader("Product List")
     products = session.query(Product).order_by(Product.id).all()
     df = pd.DataFrame([{"ID": p.id, "Name": p.name, "Price": p.price} for p in products])
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
 
+    # Edit/Delete
     st.markdown("---")
-    st.subheader("Edit / Delete product")
+    st.subheader("Edit / Delete Product")
+
     prod_map = {f"{p.id} — {p.name}": p.id for p in products}
+
     if prod_map:
-        choice_key = st.selectbox("Choose product", [""] + list(prod_map.keys()), key="edit_prod_select")
-        if choice_key:
-            pid = prod_map[choice_key]
+        selected = st.selectbox("Choose product", [""] + list(prod_map.keys()))
+
+        if selected:
+            pid = prod_map[selected]
             p = session.query(Product).get(pid)
+
             col1, col2 = st.columns(2)
             with col1:
-                new_name = st.text_input("Name", value=p.name, key=f"prod_name_{pid}")
+                new_name = st.text_input("Name", value=p.name)
             with col2:
-                new_price = st.number_input("Price", value=float(p.price), min_value=0.0, format="%.2f", key=f"prod_price_{pid}")
-            if st.button("Save changes", key=f"save_prod_{pid}"):
-                p.name = new_name.strip() or p.name
+                new_price = st.number_input("Price", value=float(p.price), min_value=0.0, format="%.2f")
+
+            if st.button("Save Product"):
+                p.name = new_name.strip()
                 p.price = float(new_price)
                 session.commit()
-                st.success("Product updated")
+                st.success("Product updated!")
                 refresh_session()
-            if st.button("Delete product", key=f"delete_prod_{pid}"):
-                # delete orders referencing it (or prevent deletion)
+
+            if st.button("Delete Product"):
+                # Delete orders referencing product
                 session.query(Order).filter(Order.product_id == pid).delete()
                 session.delete(p)
                 session.commit()
-                st.success("Product deleted")
+                st.success("Product deleted!")
                 refresh_session()
     else:
-        st.info("No products yet. Add one above.")
+        st.info("No products found.")
 
-# ---------------- Orders ----------------
+# ----------------------------------------
+# ORDERS PAGE
+# ----------------------------------------
 elif choice == "Orders":
     st.header("🧾 Orders")
 
@@ -133,63 +156,74 @@ elif choice == "Orders":
     products = session.query(Product).order_by(Product.id).all()
 
     if not customers or not products:
-        st.warning("Add at least one customer and one product before placing orders.")
+        st.warning("Please add at least one customer and one product before placing orders.")
     else:
-        with st.expander("Place new order"):
+        with st.expander("Place New Order"):
             cust_map = {f"{c.id} — {c.name}": c.id for c in customers}
             prod_map = {f"{p.id} — {p.name}": p.id for p in products}
-            selected_c = st.selectbox("Customer", list(cust_map.keys()), key="new_order_cust")
-            selected_p = st.selectbox("Product", list(prod_map.keys()), key="new_order_prod")
-            quantity = st.number_input("Quantity", min_value=1, value=1, key="new_order_qty")
-            if st.button("Place Order", key="place_order"):
+
+            selected_cust = st.selectbox("Customer", list(cust_map.keys()))
+            selected_prod = st.selectbox("Product", list(prod_map.keys()))
+            quantity = st.number_input("Quantity", min_value=1, value=1)
+
+            if st.button("Place Order"):
                 order = Order(
-                    customer_id=cust_map[selected_c],
-                    product_id=prod_map[selected_p],
+                    customer_id=cust_map[selected_cust],
+                    product_id=prod_map[selected_prod],
                     quantity=int(quantity)
                 )
                 session.add(order)
                 session.commit()
-                st.success("Order placed")
+                st.success("Order placed successfully!")
                 refresh_session()
 
+    # Order list
     st.subheader("Order List")
     orders = session.query(Order).order_by(Order.id).all()
-    df = pd.DataFrame([{
-        "ID": o.id,
-        "Customer": o.customer.name,
-        "Product": o.product.name,
-        "Quantity": o.quantity
-    } for o in orders])
-    st.dataframe(df)
+    df = pd.DataFrame([
+        {"ID": o.id, "Customer": o.customer.name, "Product": o.product.name, "Quantity": o.quantity}
+        for o in orders
+    ])
+    st.dataframe(df, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("Edit / Delete order")
+    # Edit/Delete
+    st.markdown("---")    
+    st.subheader("Edit / Delete Order")
+
     order_map = {f"{o.id} — {o.customer.name} — {o.product.name}": o.id for o in orders}
+
     if order_map:
-        choice_key = st.selectbox("Choose order", [""] + list(order_map.keys()), key="edit_order_select")
-        if choice_key:
-            oid = order_map[choice_key]
+        selected = st.selectbox("Choose order", [""] + list(order_map.keys()))
+
+        if selected:
+            oid = order_map[selected]
             o = session.query(Order).get(oid)
+
+            cust_map = {f"{c.id} — {c.name}": c.id for c in customers}
+            prod_map = {f"{p.id} — {p.name}": p.id for p in products}
+
             col1, col2 = st.columns(2)
             with col1:
-                new_qty = st.number_input("Quantity", min_value=1, value=int(o.quantity), key=f"order_qty_{oid}")
+                new_cust = st.selectbox("Customer", list(cust_map.keys()),
+                                        index=list(cust_map.values()).index(o.customer_id))
             with col2:
-                # allow swapping product/customer
-                cust_options = {f"{c.id} — {c.name}": c.id for c in customers}
-                prod_options = {f"{p.id} — {p.name}": p.id for p in products}
-                new_c = st.selectbox("Customer", list(cust_options.keys()), index=list(cust_options.values()).index(o.customer_id), key=f"order_cust_{oid}")
-                new_p = st.selectbox("Product", list(prod_options.keys()), index=list(prod_options.values()).index(o.product_id), key=f"order_prod_{oid}")
-            if st.button("Save changes", key=f"save_order_{oid}"):
+                new_prod = st.selectbox("Product", list(prod_map.keys()),
+                                        index=list(prod_map.values()).index(o.product_id))
+
+            new_qty = st.number_input("Quantity", min_value=1, value=o.quantity)
+
+            if st.button("Save Order"):
+                o.customer_id = cust_map[new_cust]
+                o.product_id = prod_map[new_prod]
                 o.quantity = int(new_qty)
-                o.customer_id = cust_options[new_c]
-                o.product_id = prod_options[new_p]
                 session.commit()
-                st.success("Order updated")
+                st.success("Order updated!")
                 refresh_session()
-            if st.button("Delete order", key=f"delete_order_{oid}"):
+
+            if st.button("Delete Order"):
                 session.delete(o)
                 session.commit()
-                st.success("Order deleted")
+                st.success("Order deleted!")
                 refresh_session()
     else:
-        st.info("No orders yet.")
+        st.info("No orders found.")
