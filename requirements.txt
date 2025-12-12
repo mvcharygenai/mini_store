@@ -1,5 +1,3 @@
 streamlit
 pandas
-sqlalchemy
-pyodbc
-python-dotenv
+databricks-sql-connector
